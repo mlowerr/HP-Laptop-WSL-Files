@@ -1,0 +1,80 @@
+#!/bin/bash
+# This script processes each subdirectory (except those whose names start with "0-")
+# in the current directory. For each such directory, it:
+#   1. Identifies regular files whose extensions start with "m" (case insensitive).
+#   2. If multiple matching files are found, moves the entire directory to "0-MultiFile".
+#   3. If exactly one matching file is found, checks if the base directory already contains
+#      a file with the same name. If yes, moves the entire directory to "0-PossibleDuplicate";
+#      if not, moves the file to the base directory.
+#   4. Deletes the directory if it becomes empty after moving the file.
+#
+# Usage:
+#   Save the script (e.g., as process_dirs.sh), make it executable with:
+#     chmod +x process_dirs.sh
+#   and run it in the directory that contains the subdirectories you wish to process.
+#
+# Create destination folders if they don't exist.
+MULTIFILE_DIR="0-MultiFile"
+POSSIBLE_DUP_DIR="0-PossibleDuplicate"
+mkdir -p "$MULTIFILE_DIR" "$POSSIBLE_DUP_DIR"
+
+# Loop through every subdirectory in the current directory.
+for dir in */; do
+    # Remove the trailing slash to get the directory name.
+    dirname="${dir%/}"
+    
+    # Skip directories whose names start with "0-".
+    if [[ "$dirname" == 0-* ]]; then
+        continue
+    fi
+
+    # Ensure we're operating on a directory.
+    if [ -d "$dirname" ]; then
+        echo "Processing directory: $dirname"
+        
+        # Initialize an array for files whose extension starts with m/M.
+        matching_files=()
+        
+        # Loop through items in the directory.
+        for item in "$dirname"/*; do
+            if [ -f "$item" ]; then
+                # Extract the basename.
+                base=$(basename "$item")
+                # Check if the filename has an extension that starts with 'm' or 'M'
+                if [[ "$base" =~ \.[mM][^.]*$ ]]; then
+                    matching_files+=("$item")
+                fi
+            fi
+        done
+
+        count=${#matching_files[@]}
+        if [ $count -gt 1 ]; then
+            echo "  Multiple ($count) matching files found. Moving entire directory into $MULTIFILE_DIR."
+            mv "$dirname" "$MULTIFILE_DIR/"
+        elif [ $count -eq 1 ]; then
+            file="${matching_files[0]}"
+            file_base=$(basename "$file")
+            # Check if a file with the same name exists in the base directory.
+            if [ -e "$file_base" ]; then
+                echo "  A file named '$file_base' already exists in the base directory."
+                echo "  Moving entire directory '$dirname' into $POSSIBLE_DUP_DIR."
+                mv "$dirname" "$POSSIBLE_DUP_DIR/"
+            else
+                echo "  One matching file found: $file"
+                echo "  Moving file to the base directory."
+                mv "$file" .
+                # If the directory is empty after moving the file, delete it.
+                if [ -z "$(ls -A "$dirname")" ]; then
+                    echo "  Directory '$dirname' is empty. Deleting it."
+                    rmdir "$dirname"
+                fi
+            fi
+        else
+            echo "  No matching files found in '$dirname'."
+        fi
+    fi
+done
+
+echo "Processing complete."
+exit 0
+

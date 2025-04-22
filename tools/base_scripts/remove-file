@@ -1,0 +1,19 @@
+#!/bin/bash
+# This script searches through all subdirectories from a given directory
+# and removes files matching a given filename pattern (case insensitive).
+#
+# Usage:
+#   ./remove-file [directory] [pattern]
+#
+# If no directory is provided, it defaults to the current directory.
+
+# Set the target directory and pattern; use defaults if not provided.
+TARGET_DIR="${1:-.}"
+PATTERN="${2}"
+
+echo "Searching for files matching '$PATTERN' in: '$TARGET_DIR'"
+
+# Find and remove files matching the pattern (case insensitive).
+find "$TARGET_DIR" -type f -iname "$PATTERN" -print -delete
+
+echo "Deletion complete."

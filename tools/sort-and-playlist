@@ -1,0 +1,39 @@
+#!/bin/bash
+# Enable nullglob so that the loop is skipped if no files match the pattern.
+shopt -s nullglob
+
+# Step 1: Process each file in the current directory with an extension starting with 'm' (case insensitive)
+for f in *.[mM]*; do
+    if [ -f "$f" ]; then
+        # Extract the first character of the filename and convert it to lowercase.
+        first_letter=$(echo "${f:0:1}" | tr '[:upper:]' '[:lower:]')
+        # Create a directory named after the first letter (if it doesn't exist).
+        mkdir -p "$first_letter"
+        # Move the file into the directory.
+        mv "$f" "$first_letter/"
+    fi
+done
+
+# Step 2 & 3: For each directory that is named by a single lowercase letter, create a VLC-compatible playlist.
+# The playlist will be stored in the directory and named "00-playlist-LETTER".
+# We use a find command to list files (excluding the playlist file) sorted in lexicographical order.
+for dir in [a-z]*/; do
+    # Remove the trailing slash to get the folder name.
+    folder=${dir%/}
+    # Define the playlist file path.
+    playlist="$folder/00-playlist-$folder.m3u"
+    # Remove the playlist file if it already exists.
+    rm -f "$playlist"
+    # (Optional) Write the "#EXTM3U" header for VLC compatibility.
+    echo "#EXTM3U" > "$playlist"
+
+    # Find all files in the folder (at max depth 1) that are regular files and not the playlist itself,
+    # then sort them and append to the playlist.
+    find "$folder" -maxdepth 1 -type f ! -name "00-playlist-$folder" | sort | while read -r file; do
+        # Append the basename of each file to the playlist.
+        echo "$(basename "$file")" >> "$playlist"
+    done
+done
+
+exit 0
+

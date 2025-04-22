@@ -1,0 +1,5 @@
+#!/bin/bash
+# This script mounts all standard drives used on laptop
+
+"$TOOLS_DIR/mount-drive-d"
+"$TOOLS_DIR/mount-drive-e"

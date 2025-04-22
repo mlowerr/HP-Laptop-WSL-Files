@@ -1,0 +1,28 @@
+#!/bin/bash
+# This script mounts the USB drive at Windows drive letter E: to /mnt/e using DrvFS on WSL.
+# It assumes that Windows has assigned the USB drive the letter E:.
+
+# Create the mount point directory if it doesn't exist.
+if [ ! -d /mnt/e ]; then
+    echo "Creating mount point /mnt/e..."
+    sudo mkdir -p /mnt/e
+fi
+
+# Check if /mnt/e is already mounted
+if mount | grep -q "on /mnt/e "; then
+    echo "Drive already mounted at /mnt/e."
+else
+    echo "Mounting drive letter E: to /mnt/e..."
+    # Mount using drvfs. This tells WSL to mount the Windows drive.
+    sudo mount -t drvfs E: /mnt/e
+    # Check again to confirm the mount was successful.
+    if mount | grep -q "on /mnt/e "; then
+        echo "Successfully mounted E: at /mnt/e."
+    else
+        echo "Failed to mount E: at /mnt/e."
+        exit 1
+    fi
+fi
+
+exit 0
+
