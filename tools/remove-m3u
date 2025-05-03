@@ -1,0 +1,9 @@
+#!/bin/bash
+# Wrapper script to remove .nfo files using remove-file
+#
+# Usage:
+#   ./remove-nfo.sh [directory]
+
+DIR="${1:-.}"
+"$TOOLS_DIR/base_scripts/remove-file" "$DIR" "*.m3u"
+
