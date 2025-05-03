@@ -24,13 +24,15 @@ for dir in */; do
     dirname="${dir%/}"
     
     # Skip directories whose names start with "0-".
-    if [[ "$dirname" == 0-* ]]; then
-        continue
+    if [[ "$dirname" == 0-* || "$dirname" =~ ^[a-zA-Z]$  || "$dirname" =~ *[Rr][Ee][Cc][Yy][Cc][Ll][Ee].[Bb][Ii][Nn]* ]]; then
+        echo "Skipping directory: $dirname"
+	continue
     fi
 
     # Ensure we're operating on a directory.
     if [ -d "$dirname" ]; then
-        echo "Processing directory: $dirname"
+        echo " "
+	echo "Processing directory: $dirname"
         
         # Initialize an array for files whose extension starts with m/M.
         matching_files=()
