@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Define the output directory name
+OUTPUT_DIR="output"
+
+# Create the output directory if it doesn't exist
+# The -p option ensures no error if the directory already exists
+mkdir -p "$OUTPUT_DIR"
+
+# Check if ffmpeg is installed
+if ! command -v ffmpeg &> /dev/null
+then
+    echo "Error: ffmpeg is not installed or not found in PATH." >&2
+    echo "Please install ffmpeg (e.g., 'sudo apt update && sudo apt install ffmpeg' on Debian/Ubuntu or 'brew install ffmpeg' on macOS)." >&2
+    exit 1
+fi
+
+# Enable nullglob to prevent the loop from running if no .mp4 files are found
+shopt -s nullglob
+
+# --- Counters for summary ---
+processed_count=0
+success_count=0
+fail_count=0
+found_files=$(ls -1 *.mp4 2>/dev/null | wc -l) # Count files beforehand
+
+if [[ $found_files -eq 0 ]]; then
+  echo "No .mp4 files found in the current directory."
+  exit 0
+fi
+
+echo "Found $found_files .mp4 file(s) to process..."
+echo "-----------------------------------------"
+
+# Iterate over all files ending with .mp4 in the current directory
+for input_file in *.mp4; do
+  # Ensure it's actually a file we're processing (safety check)
+  if [[ -f "$input_file" ]]; then
+    ((processed_count++))
+    echo "Processing file $processed_count of $found_files: '$input_file'..."
+
+    # Extract the filename without the .mp4 extension
+    base_name="${input_file%.mp4}"
+
+    # Construct the output filename
+    output_file="${OUTPUT_DIR}/${base_name}-downsample.mp4"
+
+    # --- Execute the ffmpeg command ---
+    # We add '-loglevel error' to suppress verbose ffmpeg output,
+    # but still show errors if they occur. Remove it if you want full ffmpeg logs.
+    echo "Running ffmpeg command..."
+    if ffmpeg -i "$input_file" -c:v libx264 -crf 30 -preset medium -c:a aac -b:a 128k "$output_file" -loglevel error; then
+      # --- Check if ffmpeg command was successful (exit code 0) ---
+      echo "Successfully created '$output_file'."
+      # --- Delete the original input file ---
+      rm "$input_file"
+      echo "Deleted original file '$input_file'."
+      ((success_count++))
+    else
+      # --- Handle ffmpeg command failure ---
+      echo "Error processing '$input_file'. Check ffmpeg output above." >&2
+      echo "Original file '$input_file' was NOT deleted." >&2
+      # Optional: remove potentially incomplete/corrupt output file
+      # rm -f "$output_file"
+      ((fail_count++))
+    fi
+    echo "-----------------------------------------"
+  fi
+done
+
+# Disable nullglob (optional, good practice)
+shopt -u nullglob
+
+# --- Print Summary ---
+echo "========================================="
+echo "Processing Summary:"
+echo "Total files found: $found_files"
+# echo "Files attempted: $processed_count" # Usually same as found_files unless script interrupted
+echo "Successfully processed and originals deleted: $success_count"
+echo "Failed to process (originals kept): $fail_count"
+echo "Output files are located in the '$OUTPUT_DIR' directory."
+echo "========================================="
+
+# Indicate potential issues if counts don't match
+if [[ $success_count + $fail_count -ne $found_files ]]; then
+  echo "Warning: The number of processed files ($((success_count + fail_count))) does not match the number found ($found_files). This might indicate an interruption or unexpected issue." >&2
+fi
+
+exit 0
