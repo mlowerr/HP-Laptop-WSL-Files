@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CATCHALL_DIR="/mnt/d/0-Complete"
+MAX_DEPTH=100
+
+exec get-all-of-interest -c "$CATCHALL_DIR" -m "$MAX_DEPTH" "$@"
