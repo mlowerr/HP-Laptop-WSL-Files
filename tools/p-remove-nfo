@@ -1,0 +1,26 @@
+#!/bin/bash
+# Run remove-nfo in parallel across multiple drives.
+
+INCLUDE_FLAG=""
+if [[ "$1" == "--include-0-downloads" ]]; then
+  INCLUDE_FLAG="$1"
+  shift
+fi
+
+mount_points=(/mnt/d /mnt/e /mnt/f)
+
+pids=()
+for mount_point in "${mount_points[@]}"; do
+  args=()
+  [[ -n "$INCLUDE_FLAG" ]] && args+=("$INCLUDE_FLAG")
+  args+=("$mount_point")
+
+  "$TOOLS_DIR/remove-nfo" "${args[@]}" &
+  pids+=("$!")
+  echo "Started remove-nfo for $mount_point with PID ${pids[-1]}"
+done
+
+for pid in "${pids[@]}"; do
+  wait "$pid"
+  echo "Process $pid completed"
+done

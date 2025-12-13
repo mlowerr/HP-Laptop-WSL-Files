@@ -2,8 +2,16 @@
 # Wrapper script to remove .nfo files using remove-file
 #
 # Usage:
-#   ./remove-nfo.sh [directory]
+#   ./remove-nfo [--include-0-downloads] [directory]
+
+ARGS=()
+
+if [[ "$1" == "--include-0-downloads" ]]; then
+  ARGS+=("$1")
+  shift
+fi
 
 DIR="${1:-.}"
-"$TOOLS_DIR/base_scripts/remove-file" "$DIR" "*.nfo"
+ARGS+=("$DIR" "*.nfo")
 
+"$TOOLS_DIR/base_scripts/remove-file" "${ARGS[@]}"
