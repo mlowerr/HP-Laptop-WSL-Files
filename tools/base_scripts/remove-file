@@ -3,9 +3,18 @@
 # and removes files matching a given filename pattern (case insensitive).
 #
 # Usage:
-#   ./remove-file [directory] [pattern]
+#   ./remove-file [--include-0-downloads] [directory] [pattern]
 #
-# If no directory is provided, it defaults to the current directory.
+# If no directory is provided, it defaults to the current directory. Content
+# in, or under, folders named '0-Downloads' is skipped by default unless the
+# --include-0-downloads flag is provided.
+
+INCLUDE_0_DOWNLOADS=false
+
+if [[ "$1" == "--include-0-downloads" ]]; then
+  INCLUDE_0_DOWNLOADS=true
+  shift
+fi
 
 # Set the target directory and pattern; use defaults if not provided.
 TARGET_DIR="${1:-.}"
@@ -13,7 +22,13 @@ PATTERN="${2}"
 
 echo "Searching for files matching '$PATTERN' in: '$TARGET_DIR'"
 
+FIND_EXCLUDES=()
+
+if [[ "$INCLUDE_0_DOWNLOADS" != true ]]; then
+  FIND_EXCLUDES+=(-not -path "*/0-Downloads/*")
+fi
+
 # Find and remove files matching the pattern (case insensitive).
-find "$TARGET_DIR" -type f -iname "$PATTERN" -print -delete
+find "$TARGET_DIR" -type f -iname "$PATTERN" "${FIND_EXCLUDES[@]}" -print -delete
 
 echo "Deletion complete."
