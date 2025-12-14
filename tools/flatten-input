@@ -29,9 +29,6 @@ cleanup_zero_prefix_dirs() {
     done
 }
 
-# Remove any empty directories that already start with "0-".
-cleanup_zero_prefix_dirs
-
 # Loop through every subdirectory in the current directory.
 for dir in */; do
     # Remove the trailing slash to get the directory name.
