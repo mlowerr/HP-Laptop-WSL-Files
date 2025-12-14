@@ -3,5 +3,41 @@ set -euo pipefail
 
 CATCHALL_DIR="/mnt/d/0-Complete"
 MAX_DEPTH=100
+EXCLUDE_ARGS=()
 
-exec get-all-of-interest -c "$CATCHALL_DIR" -m "$MAX_DEPTH" "$@"
+usage() {
+  echo "Usage: $0 [-m maxdepth] [-t target_dir] [-e exclude_word] word1 [word2 ... wordN]" >&2
+  exit 1
+}
+
+while getopts ":m:t:e:" opt; do
+  case "$opt" in
+    m)
+      MAX_DEPTH="$OPTARG"
+      ;;
+    t)
+      CATCHALL_DIR="$OPTARG"
+      ;;
+    e)
+      EXCLUDE_ARGS+=( -e "$OPTARG" )
+      ;;
+    \?)
+      echo "Unknown option: -$OPTARG" >&2
+      usage
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      usage
+      ;;
+  esac
+
+done
+
+shift $((OPTIND - 1))
+
+if [ "$#" -lt 1 ]; then
+  echo "Error: at least one search word is required." >&2
+  usage
+fi
+
+exec get-all-of-interest -c "$CATCHALL_DIR" -m "$MAX_DEPTH" "${EXCLUDE_ARGS[@]}" "$@"
