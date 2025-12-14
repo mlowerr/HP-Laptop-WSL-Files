@@ -18,6 +18,20 @@ MULTIFILE_DIR="0-MultiFile"
 POSSIBLE_DUP_DIR="0-PossibleDuplicate"
 mkdir -p "$MULTIFILE_DIR" "$POSSIBLE_DUP_DIR"
 
+cleanup_zero_prefix_dirs() {
+    for zero_dir in 0-*; do
+        if [ -d "$zero_dir" ]; then
+            if [ -z "$(ls -A "$zero_dir")" ]; then
+                echo "Removing empty directory: $zero_dir"
+                rmdir "$zero_dir"
+            fi
+        fi
+    done
+}
+
+# Remove any empty directories that already start with "0-".
+cleanup_zero_prefix_dirs
+
 # Loop through every subdirectory in the current directory.
 for dir in */; do
     # Remove the trailing slash to get the directory name.
@@ -76,6 +90,9 @@ for dir in */; do
         fi
     fi
 done
+
+# Clean up any empty directories that start with "0-" after processing.
+cleanup_zero_prefix_dirs
 
 echo "Processing complete."
 exit 0
