@@ -21,6 +21,11 @@ mkdir -p "$MULTIFILE_DIR" "$POSSIBLE_DUP_DIR"
 cleanup_zero_prefix_dirs() {
     for zero_dir in 0-*; do
         if [ -d "$zero_dir" ]; then
+            if [[ "$zero_dir" == "0-Downloads" ]]; then
+                echo "Skipping directory: $zero_dir"
+                continue
+            fi
+
             if [ -z "$(ls -A "$zero_dir")" ]; then
                 echo "Removing empty directory: $zero_dir"
                 rmdir "$zero_dir"
