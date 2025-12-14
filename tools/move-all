@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 
 # Move files whose names match ALL given words (case-insensitive)
-# into a directory named "selected_files" by default.
+# into a directory named "selected_files" by default, while optionally
+# excluding files whose names contain specified words.
 #
 # Usage:
-#   script.sh [-m maxdepth] [-t target_dir] word1 [word2 ...]
+#   script.sh [-m maxdepth] [-t target_dir] [-e exclude_word] word1 [word2 ...]
+#
+# Options:
+#   -m maxdepth      Maximum directory depth to search (default: 1)
+#   -t target_dir    Directory to move files into (default: ./selected_files)
+#   -e exclude_word  Word to exclude from matches (can be specified multiple times)
 
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 [-m maxdepth] [-t target_dir] word1 [word2 ... wordN]" >&2
+  echo "Usage: $0 [-m maxdepth] [-t target_dir] [-e exclude_word] word1 [word2 ... wordN]" >&2
   exit 1
 }
 
@@ -18,13 +24,18 @@ MAXDEPTH=1
 TARGET_DIR="./selected_files"
 
 # Parse options
-while getopts ":m:t:" opt; do
+EXCLUDE_WORDS=()
+
+while getopts ":m:t:e:" opt; do
   case "$opt" in
     m)
       MAXDEPTH="$OPTARG"
       ;;
     t)
       TARGET_DIR="$OPTARG"
+      ;;
+    e)
+      EXCLUDE_WORDS+=("$OPTARG")
       ;;
     \?)
       echo "Unknown option: -$OPTARG" >&2
@@ -55,6 +66,11 @@ for word in "$@"; do
   pattern_args+=( -iname "*${word}*" )
 done
 
-# Find files up to MAXDEPTH whose names contain ALL words, then move them to TARGET_DIR
-find . -maxdepth "$MAXDEPTH" -type f "${pattern_args[@]}" -exec mv {} "$TARGET_DIR"/ \;
+exclude_args=()
+for word in "${EXCLUDE_WORDS[@]}"; do
+  exclude_args+=( -not -iname "*${word}*" )
+done
+
+# Find files up to MAXDEPTH whose names contain ALL included words and none of the excluded words, then move them to TARGET_DIR
+find . -maxdepth "$MAXDEPTH" -type f "${pattern_args[@]}" "${exclude_args[@]}" -exec mv {} "$TARGET_DIR"/ \;
 
