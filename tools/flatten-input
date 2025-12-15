@@ -21,7 +21,7 @@ mkdir -p "$MULTIFILE_DIR" "$POSSIBLE_DUP_DIR"
 cleanup_zero_prefix_dirs() {
     for zero_dir in 0-*; do
         if [ -d "$zero_dir" ]; then
-            if [[ "$zero_dir" == "0-Downloads" ]]; then
+            if [[ "$zero_dir" == "0-Downloads" || "$zero_dir" == "0-Keep" || "$zero_dir" == "0-Watched" ]]; then
                 echo "Skipping directory: $zero_dir"
                 continue
             fi
