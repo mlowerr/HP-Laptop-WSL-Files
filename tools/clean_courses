@@ -3,12 +3,15 @@ set -euo pipefail
 
 usage() {
     cat <<'USAGE'
-Usage: clean_courses [--dry-run] [--source-prefix PREFIX] TARGET_DIR
+Usage: clean_courses [--dry-run] [-t|--transcode] [--source-prefix PREFIX] TARGET_DIR
 
 Clean course directories under TARGET_DIR.
 
 Options:
   -n, --dry-run              Print planned changes without modifying files.
+  -t, --transcode            After cleanup and summary output, run
+                             ~/git/ffmpeg_utility_scripts/unix/transcode_all.sh -r
+                             from TARGET_DIR. Skipped during --dry-run.
       --source-prefix PREFIX Remove a bracketed top-level source prefix matching
                              PREFIX, case-insensitively. May be repeated.
                              Defaults include WebToolTip.com/WebToolTips.com;
@@ -20,6 +23,7 @@ USAGE
 }
 
 DRY_RUN=0
+TRANSCODE_AFTER_CLEANUP=0
 GET_FILES_DIR="~Get Your Files Here !"
 SOURCE_PREFIXES=("WebToolTip.com" "WebToolTips.com")
 
@@ -27,6 +31,10 @@ while (($#)); do
     case "$1" in
         -n|--dry-run)
             DRY_RUN=1
+            shift
+            ;;
+        -t|--transcode)
+            TRANSCODE_AFTER_CLEANUP=1
             shift
             ;;
         --source-prefix)
@@ -388,3 +396,13 @@ printf '  Unique suffixes used:        %d\n' "$unique_suffixes_used"
 printf '  Empty-name skips:            %d\n' "$skipped_empty_names"
 
 echo "Cleanup complete."
+
+if ((TRANSCODE_AFTER_CLEANUP)); then
+    transcode_script="$HOME/git/ffmpeg_utility_scripts/unix/transcode_all.sh"
+    if ((DRY_RUN)); then
+        echo "DRY-RUN: would run from $ROOT_DIR: $transcode_script -r"
+    else
+        echo "Running transcode step from $ROOT_DIR: $transcode_script -r"
+        (cd "$ROOT_DIR" && "$transcode_script" -r)
+    fi
+fi
