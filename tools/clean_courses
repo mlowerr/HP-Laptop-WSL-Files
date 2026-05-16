@@ -366,7 +366,6 @@ echo
 
 ###############################################################################
 # 4. Delete Bonus Resources files, including space/underscore/hyphen variants
-#    and .txt/.text/.pdf/.html/.htm filename extensions.
 ###############################################################################
 
 echo "Step 4: Deleting Bonus Resources files..."
@@ -374,7 +373,7 @@ echo "Step 4: Deleting Bonus Resources files..."
 while IFS= read -r -d '' file; do
     base=$(path_basename "$file")
     shopt -s nocasematch
-    if [[ $base =~ ^bonus[[:space:]_.-]*resources?([[:space:]_.-].*)?\.(txt|text|pdf|html|htm)$ ]]; then
+    if [[ $base =~ ^bonus[[:space:]_.-]*resources?([[:space:]_.-].*)?\.(txt|url)$ ]]; then
         shopt -u nocasematch
         echo "Deleting: $file"
         run_rm_file "$file"
