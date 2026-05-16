@@ -2,32 +2,38 @@
 set -euo pipefail
 
 ROOT_DIR="."
-TARGET_PREFIX="[ WebToolTips.com]"
 GET_FILES_DIR="~Get Your Files Here !"
 
 echo "Starting cleanup from: $(pwd)"
 echo
 
-echo "Step 1: Renaming top-level directories..."
+###############################################################################
+# 1. Rename only top-level directories:
+#    Remove opening "[ WebToolTip.com ]" / similar WebToolTip(s) prefix
+#    and remove whitespace/separators before the real directory name.
+###############################################################################
+
+echo "Step 1: Removing WebToolTip prefix from top-level directories..."
 
 find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 |
 while IFS= read -r -d '' dir; do
+    parent="$(dirname "$dir")"
     base="$(basename "$dir")"
 
-    # Only remove the prefix if it appears at the beginning of the directory name.
-    newbase="$base"
-
-    if [[ "$newbase" == "$TARGET_PREFIX"* ]]; then
-        newbase="${newbase#"$TARGET_PREFIX"}"
-
-        # Remove any leading whitespace left after removing the prefix.
-        newbase="$(printf '%s' "$newbase" | sed 's/^[[:space:]]*//')"
-    fi
+    # Handles examples like:
+    #   [ WebToolTip.com ] Course Name
+    #   [WebToolTip.com] Course Name
+    #   [ WebToolTips.com ] Course Name
+    #   [ WebToolTip.com ] - Course Name
+    #   [ WebToolTip.com ]_Course Name
+    newbase="$(printf '%s' "$base" | sed -E 's/^\[[[:space:]]*WebToolTips?\.com[[:space:]]*\][[:space:]_-]*//')"
 
     if [[ "$base" != "$newbase" ]]; then
-        target="$(dirname "$dir")/$newbase"
+        target="$parent/$newbase"
 
-        if [[ -e "$target" ]]; then
+        if [[ -z "$newbase" ]]; then
+            echo "SKIP: '$dir' would become an empty directory name."
+        elif [[ -e "$target" ]]; then
             echo "SKIP: Cannot rename '$dir' to '$target' because target already exists."
         else
             echo "Rename directory:"
@@ -40,6 +46,13 @@ done
 
 echo
 
+###############################################################################
+# 2. Recursively replace whitespace characters in all file and directory names
+#    with underscores.
+#
+#    Deepest-first prevents path problems when renaming nested directories.
+###############################################################################
+
 echo "Step 2: Replacing whitespace in file and directory names with underscores..."
 
 find "$ROOT_DIR" -depth -mindepth 1 -print0 |
@@ -47,7 +60,6 @@ while IFS= read -r -d '' path; do
     dir="$(dirname "$path")"
     base="$(basename "$path")"
 
-    # Replace any run of whitespace characters with a single underscore.
     newbase="$(printf '%s' "$base" | sed -E 's/[[:space:]]+/_/g')"
 
     if [[ "$base" != "$newbase" ]]; then
@@ -66,6 +78,13 @@ done
 
 echo
 
+###############################################################################
+# 3. Find folders named "~Get Your Files Here !".
+#    After step 2, this folder name becomes "~Get_Your_Files_Here_!".
+#
+#    Move all contents up one level, then delete the folder if empty.
+###############################################################################
+
 echo "Step 3: Moving contents out of '~Get Your Files Here !' folders..."
 
 NORMALIZED_GET_FILES_DIR="$(printf '%s' "$GET_FILES_DIR" | sed -E 's/[[:space:]]+/_/g')"
@@ -76,9 +95,7 @@ while IFS= read -r -d '' getdir; do
 
     echo "Processing: $getdir"
 
-    # Move all contents, including hidden files, up one level.
     shopt -s dotglob nullglob
-
     items=( "$getdir"/* )
 
     if (( ${#items[@]} > 0 )); then
@@ -99,7 +116,6 @@ while IFS= read -r -d '' getdir; do
 
     shopt -u dotglob nullglob
 
-    # Delete folder only if it is empty.
     if [[ -z "$(find "$getdir" -mindepth 1 -print -quit)" ]]; then
         echo "Deleting empty folder: $getdir"
         rmdir -- "$getdir"
@@ -110,11 +126,19 @@ done
 
 echo
 
+###############################################################################
+# 4. Delete Bonus Resources files.
+#
+#    Includes original and likely normalized names.
+###############################################################################
+
 echo "Step 4: Deleting Bonus Resources files..."
 
 find "$ROOT_DIR" -type f \( \
+    -name "Bonus Resources.text" -o \
     -name "Bonus Resources.txt" -o \
-    -name "Bonus_Resources.txt" -o 
+    -name "Bonus_Resources.text" -o \
+    -name "Bonus_Resources.txt" \
 \) -print0 |
 while IFS= read -r -d '' file; do
     echo "Deleting: $file"
