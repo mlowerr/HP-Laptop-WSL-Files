@@ -28,6 +28,9 @@ export TOOLS_DIR=/workspace/HP-Laptop-WSL-Files/tools
 - `tools/sort-and-playlist`: Moves media files (`*.[mM]*`) into `a-z` folders by first character and generates `00-playlist-<letter>.m3u` files.
 - `tools/downsample-video`: Transcodes `.mp4` files to lower bitrate in `output/`, then deletes originals.
 
+### Course cleanup
+- `tools/clean_courses [--dry-run] [--source-prefix PREFIX] [--get-files-dir NAME] <course_root>`: Cleans downloaded course folders under an explicit target directory. It removes configured bracketed source-site prefixes such as `[ WebToolTip.com ]` from top-level directories case-insensitively, recursively normalizes whitespace in file and directory names to underscores, moves files out of `~Get Your Files Here !` / `~Get_Your_Files_Here_!` folders, and deletes Bonus Resources files with common text, PDF, and HTML extensions. Use `--dry-run` first to preview destructive renames, moves, directory removals, and file deletions. When a destination already exists, the script creates a deterministic suffixed path such as `__1`, `__2`, and reports the collision in its summary.
+
 ### File removal helpers
 - `tools/remove-nfo [--include-0-downloads] [directory]`: Removes `*.nfo` recursively using `tools/base_scripts/remove-file`.
 - `tools/remove-m3u [directory]`: Removes `*.m3u` recursively using `tools/base_scripts/remove-file`.
