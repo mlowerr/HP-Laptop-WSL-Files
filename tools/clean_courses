@@ -1,124 +1,354 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="."
-GET_FILES_DIR="~Get Your Files Here !"
+usage() {
+    cat <<'USAGE'
+Usage: clean_courses [--dry-run] [--source-prefix PREFIX] TARGET_DIR
 
-echo "Starting cleanup from: $(pwd)"
+Clean course directories under TARGET_DIR.
+
+Options:
+  -n, --dry-run              Print planned changes without modifying files.
+      --source-prefix PREFIX Remove a bracketed top-level source prefix matching
+                             PREFIX, case-insensitively. May be repeated.
+                             Defaults include WebToolTip.com/WebToolTips.com;
+                             extra values are appended.
+      --get-files-dir NAME   Folder name whose contents are moved up one level.
+                             Defaults to "~Get Your Files Here !".
+  -h, --help                 Show this help.
+USAGE
+}
+
+DRY_RUN=0
+GET_FILES_DIR="~Get Your Files Here !"
+SOURCE_PREFIXES=("WebToolTip.com" "WebToolTips.com")
+
+while (($#)); do
+    case "$1" in
+        -n|--dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        --source-prefix)
+            if (($# < 2)); then
+                echo "ERROR: --source-prefix requires a value." >&2
+                exit 2
+            fi
+            SOURCE_PREFIXES+=("$2")
+            shift 2
+            ;;
+        --source-prefix=*)
+            SOURCE_PREFIXES+=("${1#*=}")
+            shift
+            ;;
+        --get-files-dir)
+            if (($# < 2)); then
+                echo "ERROR: --get-files-dir requires a value." >&2
+                exit 2
+            fi
+            GET_FILES_DIR="$2"
+            shift 2
+            ;;
+        --get-files-dir=*)
+            GET_FILES_DIR="${1#*=}"
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "ERROR: Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if (($# != 1)); then
+    echo "ERROR: TARGET_DIR is required and must be the only positional argument." >&2
+    usage >&2
+    exit 2
+fi
+
+ROOT_DIR=${1%/}
+if [[ -z "$ROOT_DIR" ]]; then
+    ROOT_DIR="/"
+fi
+if [[ ! -d "$ROOT_DIR" ]]; then
+    echo "ERROR: Target directory does not exist or is not a directory: $ROOT_DIR" >&2
+    exit 1
+fi
+if ! ROOT_DIR=$(cd "$ROOT_DIR" && pwd -P); then
+    echo "ERROR: Could not resolve target directory: $1" >&2
+    exit 1
+fi
+
+shopt -s extglob
+
+prefix_dirs_renamed=0
+whitespace_paths_renamed=0
+get_dirs_found=0
+get_items_moved=0
+get_dirs_removed=0
+bonus_files_deleted=0
+unique_suffixes_used=0
+skipped_empty_names=0
+
+trim_edges() {
+    local value=$1
+    value=${value##+([[:space:]_-])}
+    value=${value%%+([[:space:]_-])}
+    printf '%s' "$value"
+}
+
+normalize_spaces() {
+    local value=$1
+    value=${value//[$' \t\r\n\v\f']/_}
+    while [[ $value == *"__"* ]]; do
+        value=${value//__/_}
+    done
+    printf '%s' "$value"
+}
+
+path_dirname() {
+    local path=$1
+    if [[ $path == */* ]]; then
+        printf '%s' "${path%/*}"
+    else
+        printf '.'
+    fi
+}
+
+path_basename() {
+    local path=$1
+    printf '%s' "${path##*/}"
+}
+
+remove_source_prefix() {
+    local base=$1
+    local prefix remaining normalized_prefix
+
+    for prefix in "${SOURCE_PREFIXES[@]}"; do
+        [[ -n $prefix ]] || continue
+        shopt -s nocasematch
+        if [[ $base =~ ^\[[[:space:]]*([^][]+)[[:space:]]*\](.*)$ ]]; then
+            normalized_prefix=$(trim_edges "${BASH_REMATCH[1]}")
+            remaining=${BASH_REMATCH[2]}
+            if [[ $normalized_prefix == "$prefix" ]]; then
+                shopt -u nocasematch
+                trim_edges "$remaining"
+                return 0
+            fi
+        fi
+        shopt -u nocasematch
+    done
+
+    printf '%s' "$base"
+}
+
+unique_target() {
+    local dir=$1
+    local base=$2
+    local original_path=${3:-}
+    local candidate="$dir/$base"
+    local stem ext n
+
+    if [[ ! -e $candidate || ( -n $original_path && $candidate == "$original_path" ) ]]; then
+        printf '%s' "$candidate"
+        return 0
+    fi
+
+    stem=$base
+    ext=""
+    if [[ $base == *.* && $base != .* ]]; then
+        stem=${base%.*}
+        ext=.${base##*.}
+    fi
+
+    n=1
+    while :; do
+        candidate="$dir/${stem}__${n}${ext}"
+        if [[ ! -e $candidate || ( -n $original_path && $candidate == "$original_path" ) ]]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+        ((++n))
+    done
+}
+
+run_mv() {
+    local source=$1
+    local target=$2
+
+    if [[ $source == "$target" ]]; then
+        return 0
+    fi
+
+    if ((DRY_RUN)); then
+        echo "DRY-RUN: mv -- '$source' '$target'"
+    else
+        mv -- "$source" "$target"
+    fi
+}
+
+run_rm_file() {
+    local file=$1
+
+    if ((DRY_RUN)); then
+        echo "DRY-RUN: rm -- '$file'"
+    else
+        rm -- "$file"
+    fi
+}
+
+run_rmdir() {
+    local dir=$1
+
+    if ((DRY_RUN)); then
+        echo "DRY-RUN: rmdir -- '$dir'"
+    else
+        rmdir -- "$dir"
+    fi
+}
+
+dir_is_empty() {
+    local dir=$1
+    local entry
+    shopt -s dotglob nullglob
+    for entry in "$dir"/*; do
+        shopt -u dotglob nullglob
+        return 1
+    done
+    shopt -u dotglob nullglob
+    return 0
+}
+
+move_or_rename() {
+    local source=$1
+    local dir=$2
+    local newbase=$3
+    local counter_name=$4
+    local target target_base
+
+    if [[ -z $newbase ]]; then
+        echo "SKIP: '$source' would become an empty name."
+        ((++skipped_empty_names))
+        return 0
+    fi
+
+    target=$(unique_target "$dir" "$newbase" "$source")
+    target_base=$(path_basename "$target")
+    if [[ $target_base != "$newbase" ]]; then
+        echo "Using unique target for collision: $target"
+        ((++unique_suffixes_used))
+    fi
+
+    echo "Move/Rename:"
+    echo "  FROM: $source"
+    echo "  TO:   $target"
+    run_mv "$source" "$target"
+    printf -v "$counter_name" '%d' "$((${!counter_name} + 1))"
+}
+
+normalized_get_files_dir=$(normalize_spaces "$GET_FILES_DIR")
+
+if ((DRY_RUN)); then
+    echo "Starting cleanup from: $ROOT_DIR (dry run)"
+else
+    echo "Starting cleanup from: $ROOT_DIR"
+fi
 echo
 
 ###############################################################################
-# 1. Rename only top-level directories:
-#    Remove opening "[ WebToolTip.com ]" / similar WebToolTip(s) prefix
-#    and remove whitespace/separators before the real directory name.
+# 1. Rename only top-level directories by removing configured bracketed source
+#    prefixes, case-insensitively.
 ###############################################################################
 
-echo "Step 1: Removing WebToolTip prefix from top-level directories..."
+echo "Step 1: Removing configured source prefixes from top-level directories..."
 
-find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 |
 while IFS= read -r -d '' dir; do
-    parent="$(dirname "$dir")"
-    base="$(basename "$dir")"
+    parent=$(path_dirname "$dir")
+    base=$(path_basename "$dir")
+    newbase=$(remove_source_prefix "$base")
 
-    # Handles examples like:
-    #   [ WebToolTip.com ] Course Name
-    #   [WebToolTip.com] Course Name
-    #   [ WebToolTips.com ] Course Name
-    #   [ WebToolTip.com ] - Course Name
-    #   [ WebToolTip.com ]_Course Name
-    newbase="$(printf '%s' "$base" | sed -E 's/^\[[[:space:]]*WebToolTips?\.com[[:space:]]*\][[:space:]_-]*//')"
-
-    if [[ "$base" != "$newbase" ]]; then
-        target="$parent/$newbase"
-
-        if [[ -z "$newbase" ]]; then
-            echo "SKIP: '$dir' would become an empty directory name."
-        elif [[ -e "$target" ]]; then
-            echo "SKIP: Cannot rename '$dir' to '$target' because target already exists."
-        else
-            echo "Rename directory:"
-            echo "  FROM: $dir"
-            echo "  TO:   $target"
-            mv -- "$dir" "$target"
-        fi
+    if [[ $base != "$newbase" ]]; then
+        move_or_rename "$dir" "$parent" "$newbase" prefix_dirs_renamed
     fi
-done
+done < <(find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
 
 echo
 
 ###############################################################################
 # 2. Recursively replace whitespace characters in all file and directory names
-#    with underscores.
-#
-#    Deepest-first prevents path problems when renaming nested directories.
+#    with underscores. Deepest-first prevents path problems when renaming nested
+#    directories.
 ###############################################################################
 
 echo "Step 2: Replacing whitespace in file and directory names with underscores..."
 
-find "$ROOT_DIR" -depth -mindepth 1 -print0 |
 while IFS= read -r -d '' path; do
-    dir="$(dirname "$path")"
-    base="$(basename "$path")"
+    dir=$(path_dirname "$path")
+    base=$(path_basename "$path")
+    newbase=$(normalize_spaces "$base")
 
-    newbase="$(printf '%s' "$base" | sed -E 's/[[:space:]]+/_/g')"
-
-    if [[ "$base" != "$newbase" ]]; then
-        target="$dir/$newbase"
-
-        if [[ -e "$target" ]]; then
-            echo "SKIP: Cannot rename '$path' to '$target' because target already exists."
-        else
-            echo "Rename:"
-            echo "  FROM: $path"
-            echo "  TO:   $target"
-            mv -- "$path" "$target"
-        fi
+    if [[ $base != "$newbase" ]]; then
+        move_or_rename "$path" "$dir" "$newbase" whitespace_paths_renamed
     fi
-done
+done < <(find "$ROOT_DIR" -depth -mindepth 1 -print0)
 
 echo
 
 ###############################################################################
-# 3. Find folders named "~Get Your Files Here !".
-#    After step 2, this folder name becomes "~Get_Your_Files_Here_!".
-#
-#    Move all contents up one level, then delete the folder if empty.
+# 3. Collect folders named like "~Get Your Files Here !" before moving. After
+#    whitespace normalization, the default folder is "~Get_Your_Files_Here_!".
 ###############################################################################
 
-echo "Step 3: Moving contents out of '~Get Your Files Here !' folders..."
+echo "Step 3: Moving contents out of '$GET_FILES_DIR' folders..."
 
-NORMALIZED_GET_FILES_DIR="$(printf '%s' "$GET_FILES_DIR" | sed -E 's/[[:space:]]+/_/g')"
-
-find "$ROOT_DIR" -type d -name "$NORMALIZED_GET_FILES_DIR" -print0 |
+get_dirs=()
 while IFS= read -r -d '' getdir; do
-    parent="$(dirname "$getdir")"
+    getbase=$(path_basename "$getdir")
+    if [[ $(normalize_spaces "$getbase") == "$normalized_get_files_dir" ]]; then
+        get_dirs+=("$getdir")
+    fi
+done < <(find "$ROOT_DIR" -depth -type d -print0)
+
+for getdir in "${get_dirs[@]}"; do
+    parent=$(path_dirname "$getdir")
+    ((++get_dirs_found))
 
     echo "Processing: $getdir"
 
     shopt -s dotglob nullglob
-    items=( "$getdir"/* )
-
-    if (( ${#items[@]} > 0 )); then
-        for item in "${items[@]}"; do
-            itembase="$(basename "$item")"
-            target="$parent/$itembase"
-
-            if [[ -e "$target" ]]; then
-                echo "SKIP: Cannot move '$item' to '$target' because target already exists."
-            else
-                echo "Move:"
-                echo "  FROM: $item"
-                echo "  TO:   $target"
-                mv -- "$item" "$target"
-            fi
-        done
-    fi
-
+    items=("$getdir"/*)
     shopt -u dotglob nullglob
 
-    if [[ -z "$(find "$getdir" -mindepth 1 -print -quit)" ]]; then
+    for item in "${items[@]}"; do
+        itembase=$(path_basename "$item")
+        move_or_rename "$item" "$parent" "$itembase" get_items_moved
+    done
+
+    if ((DRY_RUN)); then
+        if ((${#items[@]} == 0)); then
+            echo "Deleting empty folder: $getdir"
+            run_rmdir "$getdir"
+            ((++get_dirs_removed))
+        else
+            echo "DRY-RUN: would remove folder if empty after moving: $getdir"
+            ((++get_dirs_removed))
+        fi
+    elif dir_is_empty "$getdir"; then
         echo "Deleting empty folder: $getdir"
-        rmdir -- "$getdir"
+        run_rmdir "$getdir"
+        ((++get_dirs_removed))
     else
         echo "NOT EMPTY, keeping folder: $getdir"
     fi
@@ -127,23 +357,34 @@ done
 echo
 
 ###############################################################################
-# 4. Delete Bonus Resources files.
-#
-#    Includes original and likely normalized names.
+# 4. Delete Bonus Resources files, including space/underscore/hyphen variants
+#    and .txt/.text/.pdf/.html/.htm filename extensions.
 ###############################################################################
 
 echo "Step 4: Deleting Bonus Resources files..."
 
-find "$ROOT_DIR" -type f \( \
-    -name "Bonus Resources.text" -o \
-    -name "Bonus Resources.txt" -o \
-    -name "Bonus_Resources.text" -o \
-    -name "Bonus_Resources.txt" \
-\) -print0 |
 while IFS= read -r -d '' file; do
-    echo "Deleting: $file"
-    rm -- "$file"
-done
+    base=$(path_basename "$file")
+    shopt -s nocasematch
+    if [[ $base =~ ^bonus[[:space:]_.-]*resources?([[:space:]_.-].*)?\.(txt|text|pdf|html|htm)$ ]]; then
+        shopt -u nocasematch
+        echo "Deleting: $file"
+        run_rm_file "$file"
+        ((++bonus_files_deleted))
+    else
+        shopt -u nocasematch
+    fi
+done < <(find "$ROOT_DIR" -type f -print0)
 
 echo
+echo "Summary:"
+printf '  Prefix directories renamed: %d\n' "$prefix_dirs_renamed"
+printf '  Whitespace paths renamed:    %d\n' "$whitespace_paths_renamed"
+printf '  Get-files folders found:     %d\n' "$get_dirs_found"
+printf '  Get-files items moved:       %d\n' "$get_items_moved"
+printf '  Get-files folders removed:   %d\n' "$get_dirs_removed"
+printf '  Bonus files deleted:         %d\n' "$bonus_files_deleted"
+printf '  Unique suffixes used:        %d\n' "$unique_suffixes_used"
+printf '  Empty-name skips:            %d\n' "$skipped_empty_names"
+
 echo "Cleanup complete."

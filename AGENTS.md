@@ -19,6 +19,7 @@ This repository is a collection of Bash utilities used in a WSL environment to m
   - `tools/process_files`: Runs `remove-nfo`, `flatten-input`, and `sort-and-playlist` in sequence.
   - `tools/prep-folders`: Creates `0-Watched` in each immediate child directory, then runs `flatten-input` inside each.
 - Cleanup/removal utilities:
+  - `tools/clean_courses`: Requires an explicit target directory; supports `--dry-run`, repeatable `--source-prefix`, and `--get-files-dir`; cleans downloaded course trees by removing configured bracketed source-site prefixes from top-level directories, normalizing whitespace to underscores, hoisting `~Get Your Files Here !` folder contents, deleting Bonus Resources files, and using deterministic collision suffixes.
   - `tools/remove-nfo`: Removes `*.nfo` files via `base_scripts/remove-file`; supports `--include-0-downloads`.
   - `tools/remove-m3u`: Removes `*.m3u` files via `base_scripts/remove-file`.
   - `tools/p-remove-nfo`: Runs `remove-nfo` in parallel for `/mnt/d` through `/mnt/i` (built from a drive-letter list).
