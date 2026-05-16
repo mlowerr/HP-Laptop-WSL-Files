@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="."
+TARGET_PREFIX="[ WebToolTips.com]"
+GET_FILES_DIR="~Get Your Files Here !"
+
+echo "Starting cleanup from: $(pwd)"
+echo
+
+echo "Step 1: Renaming top-level directories..."
+
+find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 |
+while IFS= read -r -d '' dir; do
+    base="$(basename "$dir")"
+
+    # Only remove the prefix if it appears at the beginning of the directory name.
+    newbase="$base"
+
+    if [[ "$newbase" == "$TARGET_PREFIX"* ]]; then
+        newbase="${newbase#"$TARGET_PREFIX"}"
+
+        # Remove any leading whitespace left after removing the prefix.
+        newbase="$(printf '%s' "$newbase" | sed 's/^[[:space:]]*//')"
+    fi
+
+    if [[ "$base" != "$newbase" ]]; then
+        target="$(dirname "$dir")/$newbase"
+
+        if [[ -e "$target" ]]; then
+            echo "SKIP: Cannot rename '$dir' to '$target' because target already exists."
+        else
+            echo "Rename directory:"
+            echo "  FROM: $dir"
+            echo "  TO:   $target"
+            mv -- "$dir" "$target"
+        fi
+    fi
+done
+
+echo
+
+echo "Step 2: Replacing whitespace in file and directory names with underscores..."
+
+find "$ROOT_DIR" -depth -mindepth 1 -print0 |
+while IFS= read -r -d '' path; do
+    dir="$(dirname "$path")"
+    base="$(basename "$path")"
+
+    # Replace any run of whitespace characters with a single underscore.
+    newbase="$(printf '%s' "$base" | sed -E 's/[[:space:]]+/_/g')"
+
+    if [[ "$base" != "$newbase" ]]; then
+        target="$dir/$newbase"
+
+        if [[ -e "$target" ]]; then
+            echo "SKIP: Cannot rename '$path' to '$target' because target already exists."
+        else
+            echo "Rename:"
+            echo "  FROM: $path"
+            echo "  TO:   $target"
+            mv -- "$path" "$target"
+        fi
+    fi
+done
+
+echo
+
+echo "Step 3: Moving contents out of '~Get Your Files Here !' folders..."
+
+NORMALIZED_GET_FILES_DIR="$(printf '%s' "$GET_FILES_DIR" | sed -E 's/[[:space:]]+/_/g')"
+
+find "$ROOT_DIR" -type d -name "$NORMALIZED_GET_FILES_DIR" -print0 |
+while IFS= read -r -d '' getdir; do
+    parent="$(dirname "$getdir")"
+
+    echo "Processing: $getdir"
+
+    # Move all contents, including hidden files, up one level.
+    shopt -s dotglob nullglob
+
+    items=( "$getdir"/* )
+
+    if (( ${#items[@]} > 0 )); then
+        for item in "${items[@]}"; do
+            itembase="$(basename "$item")"
+            target="$parent/$itembase"
+
+            if [[ -e "$target" ]]; then
+                echo "SKIP: Cannot move '$item' to '$target' because target already exists."
+            else
+                echo "Move:"
+                echo "  FROM: $item"
+                echo "  TO:   $target"
+                mv -- "$item" "$target"
+            fi
+        done
+    fi
+
+    shopt -u dotglob nullglob
+
+    # Delete folder only if it is empty.
+    if [[ -z "$(find "$getdir" -mindepth 1 -print -quit)" ]]; then
+        echo "Deleting empty folder: $getdir"
+        rmdir -- "$getdir"
+    else
+        echo "NOT EMPTY, keeping folder: $getdir"
+    fi
+done
+
+echo
+
+echo "Step 4: Deleting Bonus Resources files..."
+
+find "$ROOT_DIR" -type f \( \
+    -name "Bonus Resources.txt" -o \
+    -name "Bonus_Resources.txt" -o 
+\) -print0 |
+while IFS= read -r -d '' file; do
+    echo "Deleting: $file"
+    rm -- "$file"
+done
+
+echo
+echo "Cleanup complete."
